@@ -6,7 +6,7 @@ https://cr.console.aliyun.com/
 
 ## 2、Github Action 搭建后端
 
-### 新建仓库一个，添加4个环境变量
+### 新建仓库一个，添加6个环境变量
 
 进入 Settings -> Secret and variables -> Actions -> New Repository secret  添加下面的四个值
 
