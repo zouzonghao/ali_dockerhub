@@ -21,6 +21,25 @@ jobs:
           source_docker_image: ${{ matrix.images.source }}
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
 
+      - name: Acquire lock using GitHub API
+        id: lock
+        run: |
+          # 检查锁文件是否存在
+          if curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${{ secrets.S_TOKEN }}" \
+            https://api.github.com/repos/${{ secrets.S_REPO }}/contents/.lock | grep -q 200; then
+            echo "Lock file exists, waiting..."
+            sleep 10
+            exit 1
+          else
+            # 创建锁文件
+            echo "Lock file does not exist, creating lock..."
+            curl -X PUT -H "Authorization: token ${{ secrets.S_TOKEN }}" \
+              -d '{"message":"Create lock file","content":"IyBsb2NrCg=="}' \
+              https://api.github.com/repos/${{ secrets.S_REPO }}/contents/.lock
+            echo "Lock acquired."
+          fi
+        continue-on-error: true
+        
       - name: Checkout private repository
         uses: actions/checkout@v4
         with:
@@ -47,36 +66,19 @@ jobs:
           cd private-repo
           git push https://x-access-token:${{ secrets.S_TOKEN }}@github.com/${{ secrets.S_REPO }}.git HEAD:main
 
-      - name: Acquire lock using GitHub API
-        id: lock
-        run: |
-          # 检查锁文件是否存在
-          if curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/contents/.lock | grep -q 200; then
-            echo "Lock file exists, waiting..."
-            sleep 10
-            exit 1
-          else
-            # 创建锁文件
-            echo "Lock file does not exist, creating lock..."
-            curl -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -d '{"message":"Create lock file","content":"IyBsb2NrCg=="}' \
-              https://api.github.com/repos/${{ github.repository }}/contents/.lock
-            echo "Lock acquired."
-          fi
-        continue-on-error: true
+
 
       - name: Get lock file SHA
         id: get_lock_sha
         run: |
-          LOCK_SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/contents/.lock | jq -r '.sha')
+          LOCK_SHA=$(curl -s -H "Authorization: token ${{ secrets.S_TOKEN }}" \
+            https://api.github.com/repos/${{ secrets.S_REPO }}/contents/.lock | jq -r '.sha')
           echo "::set-output name=sha::$LOCK_SHA"
 
       - name: Release lock using GitHub API
         if: always()
         run: |
-          curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          curl -X DELETE -H "Authorization: token ${{ secrets.S_TOKEN }}" \
             -d '{"message":"Release lock file", "sha": "${{ steps.get_lock_sha.outputs.sha }}"}' \
-            https://api.github.com/repos/${{ github.repository }}/contents/.lock
+            https://api.github.com/repos/${{ secrets.S_REPO }}/contents/.lock
           echo "Lock released."
