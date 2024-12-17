@@ -1,4 +1,3 @@
-# 同步镜像仓库的镜像到阿里云仓库
 name: Sync Docker Image To Aliyun Repo By Api
 
 on:
@@ -51,6 +50,10 @@ jobs:
         env:
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
 
+      - name: Pull latest changes
+        run: |
+          git pull --rebase origin main
+
       - name: Commit and push changes to ali_image.txt
         run: |
           git config --global user.name "github-actions[bot]"
@@ -59,12 +62,17 @@ jobs:
           git commit -m "Update ali_image.txt with new docker pull command"
           git push
 
+      - name: Get lock file SHA
+        id: get_lock_sha
+        run: |
+          LOCK_SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/contents/.lock | jq -r '.sha')
+          echo "::set-output name=sha::$LOCK_SHA"
+
       - name: Release lock using GitHub API
         if: always()
         run: |
-          # 删除锁文件
           curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -d '{"message":"Release lock file"}' \
+            -d '{"message":"Release lock file", "sha": "${{ steps.get_lock_sha.outputs.sha }}"}' \
             https://api.github.com/repos/${{ github.repository }}/contents/.lock
           echo "Lock released."
-          git push
