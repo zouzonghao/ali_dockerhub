@@ -1,2 +1,3 @@
 
 docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/alpine:ARM64
+docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/vaultwarden:AMD64_1.26.0
