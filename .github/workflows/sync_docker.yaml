@@ -47,8 +47,12 @@ jobs:
           token: ${{ secrets.S_TOKEN }}    # 使用 S_TOKEN 进行身份验证
           path: private-repo              # 指定拉取的私库存放路径
 
+          
+        
+
       - name: Append docker pull command to image_list.txt
         run: |
+          git pull --rebase https://x-access-token:${{ secrets.S_TOKEN }}@github.com/${{ secrets.S_REPO }}.git main
           echo "docker pull $target_docker_image" >> private-repo/image_list.txt
         env:
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
