@@ -50,16 +50,19 @@ jobs:
         env:
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
 
-      - name: Pull latest changes
-        run: |
-          git pull --rebase origin main
-
-      - name: Commit and push changes to ali_image.txt
+      - name: Commit local changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ali_image.txt
           git commit -m "Update ali_image.txt with new docker pull command"
+
+      - name: Pull latest changes
+        run: |
+          git pull --rebase origin main
+
+      - name: Push changes
+        run: |
           git push
 
       - name: Get lock file SHA
