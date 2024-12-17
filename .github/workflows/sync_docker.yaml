@@ -43,13 +43,7 @@ jobs:
             echo "Lock acquired."
           fi
         continue-on-error: true
-
-      - name: Append docker pull command to ali_image.txt
-        run: |
-          echo "docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/$target_docker_image" >> ali_image.txt
-        env:
-          target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
-
+        
       - name: Commit local changes
         run: |
           git config --global user.name "github-actions[bot]"
@@ -60,6 +54,14 @@ jobs:
       - name: Pull latest changes
         run: |
           git pull --rebase origin main
+          
+      - name: Append docker pull command to ali_image.txt
+        run: |
+          echo "docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/$target_docker_image" >> ali_image.txt
+        env:
+          target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
+
+
 
       - name: Push changes
         run: |
