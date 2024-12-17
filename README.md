@@ -125,7 +125,7 @@ jobs:
 ### 新建一个 worker，将下面的代码填入
 
 <details> 
-	<summary>Title</summary>
+	<summary>worker.js</summary>
   
 ```js
 addEventListener('fetch', event => {
@@ -303,9 +303,9 @@ async function handleRequest(request) {
 
 设置 -> 变量和机密
 
-GITHUB_TOKEN -> 新建一个 github token 
-REPO_OWNER -> github 用户名
-REPO_NAME -> github 仓库名
+- GITHUB_TOKEN -> 新建一个 github token 
+- REPO_OWNER -> github 用户名
+- REPO_NAME -> github 仓库名
 
 
 
