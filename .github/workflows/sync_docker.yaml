@@ -1,0 +1,46 @@
+# 同步镜像仓库的镜像到阿里云仓库
+name: Sync Docker Image To Aliyun Repo By Api
+
+on:
+  repository_dispatch:
+    types: sync_docker # 只有当 event_type 为 sync_docker 时触发
+
+jobs:
+  sync-task:
+    # 运行环境为最新的 Ubuntu
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # 如果某个任务失败，不会立即取消其他任务
+      matrix:
+        # 接收 API 传入的镜像列表
+        images: ${{ github.event.client_payload.images }}
+
+    # 步骤表示一系列任务，将按顺序执行
+    steps:
+      - uses: actions/checkout@v4 # 检出代码库
+
+      - name: Sync ${{ matrix.images.source }} to ${{ matrix.images.target }}
+        run: |
+          # 拉取源镜像，指定架构（如果需要）
+          docker pull --platform ${{ matrix.images.platform || 'linux/amd64' }} $source_docker_image
+          # 给镜像打上目标标签
+          docker tag $source_docker_image $target_docker_image
+          # 登录到阿里云容器镜像服务
+          docker login --username=${{ secrets.ALIYUN_REGISTRY_USER }} --password=${{ secrets.ALIYUN_REGISTRY_PASSWORD }} ${{ secrets.ALIYUN_REGISTRY }}
+          # 推送镜像到目标仓库
+          docker push $target_docker_image
+        env:
+          source_docker_image: ${{ matrix.images.source }} # 源镜像名称和标签
+          target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }} # 目标镜像名称和标签
+
+      - name: Append docker pull command to ali_image.txt
+        run: |
+          echo "docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/${{ target_docker_image }}" >> ali_image.txt
+
+      - name: Commit and push changes to ali_image.txt
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add ali_image.txt
+          git commit -m "Update ali_image.txt with new docker pull command"
+          git push
