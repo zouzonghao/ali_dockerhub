@@ -52,8 +52,7 @@ jobs:
 
       - name: Append docker pull command to image_list.txt
         run: |
-          cd private-repo
-          git pull --rebase https://x-access-token:${{ secrets.S_TOKEN }}@github.com/${{ secrets.S_REPO }}.git main
+
           echo "docker pull $target_docker_image" >> private-repo/image_list.txt
         env:
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
