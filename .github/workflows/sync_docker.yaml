@@ -1,0 +1,34 @@
+# 同步镜像仓库的镜像到阿里云仓库
+name: Sync Docker Image To Aliyun Repo By Api
+
+on:
+  repository_dispatch:
+    types: sync_docker # 只有当 event_type 为 sync_docker 时触发
+
+jobs:
+  sync-task:
+    # 运行环境为最新的 Ubuntu
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # 如果某个任务失败，不会立即取消其他任务
+      matrix:
+        # 接收 API 传入的镜像列表
+        images: ${{ github.event.client_payload.images }}
+
+    # 步骤表示一系列任务，将按顺序执行
+    steps:
+      - uses: actions/checkout@v2 # 检出代码库（虽然在本场景中不需要代码库）
+
+      - name: Sync ${{ matrix.images.source }} to ${{ matrix.images.target }}
+        run: |
+          # 拉取源镜像，指定架构（如果需要）
+          docker pull --platform ${{ matrix.images.platform || 'linux/amd64' }} $source_docker_image
+          # 给镜像打上目标标签
+          docker tag $source_docker_image $target_docker_image
+          # 登录到阿里云容器镜像服务
+          docker login --username=${{ secrets.DOCKER_USERNAME }} --password=${{ secrets.DOCKER_PASSWORD }} ${{ secrets.DOCKER_REGISTRY }}
+          # 推送镜像到目标仓库
+          docker push $target_docker_image
+        env:
+          source_docker_image: ${{ matrix.images.source }} # 源镜像名称和标签
+          target_docker_image: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ matrix.images.target }} # 目标镜像名称和标签
