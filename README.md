@@ -1,38 +1,61 @@
-# ali_dockerhub
+# 从 Cloudflare worker 到 Github Action 再到阿里云 Docker
+
+![](./demo.avif)
+
+
+
+原理：前端 Cloudflare worker ，接收用户的参数，访问 Github Action api，激活 Action 下载镜像，同步到阿里云镜像仓库，然后将镜像拉取命令保存私库
 
 ## 1、阿里云创建仓库
 
 https://cr.console.aliyun.com/
 
-## 2、Github Action 搭建后端
+收集 4 个值
+- 用户名
+- 密码
+- 仓库地址
+- 命名空间
 
-### 新建仓库一个，添加6个环境变量
+## 2、Github 【私库】
 
-进入 Settings -> Secret and variables -> Actions -> New Repository secret  添加下面的四个值
+新建一个【私库】，专门用来存放生成的镜像列表，Action执行后，会在仓库生成一个 images_list.txt 文件
 
-- ALIYUN_NAME_SPACE -> 阿里云命名空间
-- ALIYUN_REGISTRY_USER -> 用户名
-- ALIYUN_REGISTRY_PASSWORD -> 密码
-- ALIYUN_REGISTRY -> 仓库地址
-- S_REPO -> 用户名/私库名
-- S_TOKEN -> 私库token
+里面记载了所有同步到阿里云的镜像的拉取命令，方便以后查找
 
-### 创建一个 github token
+创建的时候，勾选生成 .md 文件
+
+## 2、Github 【Action库】
+
+新建一个公开的库，主要执行Action用，称为【Action库】
+
+### 创建2个 github token
 
 https://github.com/settings/tokens?type=beta
 
-### 给 Action 权限
+两个仓库，分别创建一个限权token:
 
-用来写 ali_image.txt 查看所有可用镜像
+- 【私库】token 需填入 Action 仓库的环境变量，
+- 【Action库】 token 需填入 Cloudflare worker 的环境变量
 
-进入 Settings -> general -> 最下面 Workflow permissions -> Read and write permissions √
+也可以创建一个全局 token，替代这两个
+
+### 在【Action库】添加6个环境变量
+
+进入 Settings -> Secret and variables -> Actions -> New Repository secret  添加下面的
+
+- ALIYUN_NAME_SPACE -> 阿里云命名空间
+- ALIYUN_REGISTRY_USER -> 阿里云用户名
+- ALIYUN_REGISTRY_PASSWORD -> 阿里云密码
+- ALIYUN_REGISTRY -> 阿里云仓库地址
+- S_REPO -> Github用户名/【私库】名
+- S_TOKEN -> 【私库】token
 
 
-#### 添加文件，路径为 .github/workeflows/docker.yaml
+### 添加文件，路径为 .github/workeflows/docker.yaml
 
-<details> 
+<details>
 	<summary>docker.yaml</summary>
-  
+
 ```yaml
 name: Sync Docker Image To Aliyun Repo By Api
 on:
@@ -75,7 +98,7 @@ jobs:
             echo "Lock acquired."
           fi
         continue-on-error: true
-        
+
       - name: Checkout private repository
         uses: actions/checkout@v4
         with:
@@ -83,8 +106,8 @@ jobs:
           token: ${{ secrets.S_TOKEN }}    # 使用 S_TOKEN 进行身份验证
           path: private-repo              # 指定拉取的私库存放路径
 
-          
-        
+
+
 
       - name: Append docker pull command to image_list.txt
         run: |
@@ -133,7 +156,7 @@ jobs:
         run: |
           cd private-repo
           git push https://x-access-token:${{ secrets.S_TOKEN }}@github.com/${{ secrets.S_REPO }}.git HEAD:main
-          
+
       - name: Get lock file SHA
         id: get_lock_sha
         run: |
@@ -156,9 +179,9 @@ jobs:
 
 ### 新建一个 worker，将下面的代码填入
 
-<details> 
+<details>
 	<summary>worker.js</summary>
-  
+
 ```js
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request));
@@ -337,10 +360,9 @@ async function handleRequest(request) {
 
 设置 -> 变量和机密
 
-- GITHUB_TOKEN -> 新建一个 github token 
+- GITHUB_TOKEN -> github【Action库】token
 - REPO_OWNER -> github 用户名
-- REPO_NAME -> github 仓库名
+- REPO_NAME -> github【Action库】
 - ALIYUN_NAME_SPACE -> 阿里云仓库命名空间
 - ALIYUN_REGISTRY -> 阿里云仓库地址
-
 
