@@ -7,37 +7,49 @@ on:
 
 jobs:
   sync-task:
-    # 运行环境为最新的 Ubuntu
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false # 如果某个任务失败，不会立即取消其他任务
+      fail-fast: false
       matrix:
-        # 接收 API 传入的镜像列表
         images: ${{ github.event.client_payload.images }}
 
-    # 步骤表示一系列任务，将按顺序执行
     steps:
-      - uses: actions/checkout@v4 # 检出代码库
+      - uses: actions/checkout@v4
 
       - name: Sync ${{ matrix.images.source }} to ${{ matrix.images.target }}
         run: |
-          # 拉取源镜像，指定架构（如果需要）
           docker pull --platform ${{ matrix.images.platform || 'linux/amd64' }} $source_docker_image
-          # 给镜像打上目标标签
           docker tag $source_docker_image $target_docker_image
-          # 登录到阿里云容器镜像服务
           docker login --username=${{ secrets.ALIYUN_REGISTRY_USER }} --password=${{ secrets.ALIYUN_REGISTRY_PASSWORD }} ${{ secrets.ALIYUN_REGISTRY }}
-          # 推送镜像到目标仓库
           docker push $target_docker_image
         env:
-          source_docker_image: ${{ matrix.images.source }} # 源镜像名称和标签
-          target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }} # 目标镜像名称和标签
+          source_docker_image: ${{ matrix.images.source }}
+          target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
+
+      - name: Acquire lock using GitHub API
+        id: lock
+        run: |
+          # 检查锁文件是否存在
+          if curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/contents/.lock | grep -q 200; then
+            echo "Lock file exists, waiting..."
+            sleep 10
+            exit 1
+          else
+            # 创建锁文件
+            echo "Lock file does not exist, creating lock..."
+            curl -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -d '{"message":"Create lock file","content":"IyBsb2NrCg=="}' \
+              https://api.github.com/repos/${{ github.repository }}/contents/.lock
+            echo "Lock acquired."
+          fi
+        continue-on-error: true
 
       - name: Append docker pull command to ali_image.txt
         run: |
           echo "docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/$target_docker_image" >> ali_image.txt
         env:
-          target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }} # 目标镜像名称和标签
+          target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
 
       - name: Commit and push changes to ali_image.txt
         run: |
@@ -45,4 +57,14 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ali_image.txt
           git commit -m "Update ali_image.txt with new docker pull command"
+          git push
+
+      - name: Release lock using GitHub API
+        if: always()
+        run: |
+          # 删除锁文件
+          curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -d '{"message":"Release lock file"}' \
+            https://api.github.com/repos/${{ github.repository }}/contents/.lock
+          echo "Lock released."
           git push
