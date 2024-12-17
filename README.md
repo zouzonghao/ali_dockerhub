@@ -88,26 +88,52 @@ jobs:
 
       - name: Append docker pull command to image_list.txt
         run: |
+          # 去重处理
+          cat private-repo/image_list.txt | awk '!seen[$0]++' > private-repo/image_list_temp.txt
+          mv private-repo/image_list_temp.txt private-repo/image_list.txt  # 修复路径
 
-          echo "docker pull $target_docker_image" >> private-repo/image_list.txt
+          # 检查是否已经存在相同的 docker pull 命令
+          if ! grep -Fxq "docker pull $target_docker_image" private-repo/image_list.txt; then
+            # 如果不存在，则追加新的 docker pull 命令
+            echo "docker pull $target_docker_image" >> private-repo/image_list.txt
+          else
+            echo "Docker pull command already exists in image_list.txt, skipping append."
+          fi
         env:
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
 
+      - name: Check if there are changes to commit
+        id: check_changes
+        run: |
+          cd private-repo
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::set-output name=has_changes::true"
+          else
+            echo "::set-output name=has_changes::false"
+          fi
+
       - name: Commit local changes
+        if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           cd private-repo
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add image_list.txt
+          git add image_list.txt  # 确保添加正确的文件
           git commit -m "Update image_list.txt with new docker pull command"
 
+      - name: Fetch and merge remote changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          cd private-repo
+          git fetch origin main
+          git merge origin/main
+
       - name: Push changes
+        if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           cd private-repo
           git push https://x-access-token:${{ secrets.S_TOKEN }}@github.com/${{ secrets.S_REPO }}.git HEAD:main
-
-
-
+          
       - name: Get lock file SHA
         id: get_lock_sha
         run: |
