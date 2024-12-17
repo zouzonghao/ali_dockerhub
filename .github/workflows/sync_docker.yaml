@@ -44,15 +44,12 @@ jobs:
           fi
         continue-on-error: true
         
-      - name: Commit local changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add ali_image.txt
-          git commit -m "Update ali_image.txt with new docker pull command"
+
 
       - name: Pull latest changes
         run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git pull --rebase origin main
           
       - name: Append docker pull command to ali_image.txt
@@ -60,7 +57,11 @@ jobs:
           echo "docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/$target_docker_image" >> ali_image.txt
         env:
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
-
+      
+      - name: Commit local changes
+        run: |
+          git add ali_image.txt
+          git commit -m "Update ali_image.txt with new docker pull command"
 
 
       - name: Push changes
