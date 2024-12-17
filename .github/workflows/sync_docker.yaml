@@ -85,12 +85,18 @@ jobs:
           git add image_list.txt
           git commit -m "Update image_list.txt with new docker pull command"
 
+      - name: Fetch and merge remote changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          cd private-repo
+          git fetch origin main
+          git merge origin/main
+
       - name: Push changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           cd private-repo
           git push https://x-access-token:${{ secrets.S_TOKEN }}@github.com/${{ secrets.S_REPO }}.git HEAD:main
-
 
       - name: Get lock file SHA
         id: get_lock_sha
