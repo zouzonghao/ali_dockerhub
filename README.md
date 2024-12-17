@@ -14,6 +14,8 @@ https://cr.console.aliyun.com/
 - ALIYUN_REGISTRY_USER -> 用户名
 - ALIYUN_REGISTRY_PASSWORD -> 密码
 - ALIYUN_REGISTRY -> 仓库地址
+- S_REPO -> 用户名/私库名
+- S_TOKEN -> 私库token
 
 ### 创建一个 github token
 
@@ -33,11 +35,9 @@ https://github.com/settings/tokens?type=beta
   
 ```yaml
 name: Sync Docker Image To Aliyun Repo By Api
-
 on:
   repository_dispatch:
     types: sync_docker # 只有当 event_type 为 sync_docker 时触发
-
 jobs:
   sync-task:
     runs-on: ubuntu-latest
@@ -45,10 +45,8 @@ jobs:
       fail-fast: false
       matrix:
         images: ${{ github.event.client_payload.images }}
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Sync ${{ matrix.images.source }} to ${{ matrix.images.target }}
         run: |
           docker pull --platform ${{ matrix.images.platform || 'linux/amd64' }} $source_docker_image
@@ -63,58 +61,66 @@ jobs:
         id: lock
         run: |
           # 检查锁文件是否存在
-          if curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/contents/.lock | grep -q 200; then
+          if curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${{ secrets.S_TOKEN }}" \
+            https://api.github.com/repos/${{ secrets.S_REPO }}/contents/.lock | grep -q 200; then
             echo "Lock file exists, waiting..."
             sleep 10
             exit 1
           else
             # 创建锁文件
             echo "Lock file does not exist, creating lock..."
-            curl -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            curl -X PUT -H "Authorization: token ${{ secrets.S_TOKEN }}" \
               -d '{"message":"Create lock file","content":"IyBsb2NrCg=="}' \
-              https://api.github.com/repos/${{ github.repository }}/contents/.lock
+              https://api.github.com/repos/${{ secrets.S_REPO }}/contents/.lock
             echo "Lock acquired."
           fi
         continue-on-error: true
         
+      - name: Checkout private repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.S_REPO }} # 使用 secrets.S_REPO 动态指定私库
+          token: ${{ secrets.S_TOKEN }}    # 使用 S_TOKEN 进行身份验证
+          path: private-repo              # 指定拉取的私库存放路径
 
-
-      - name: Pull latest changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main
           
-      - name: Append docker pull command to ali_image.txt
+        
+
+      - name: Append docker pull command to image_list.txt
         run: |
-          echo "docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/$target_docker_image" >> ali_image.txt
+
+          echo "docker pull $target_docker_image" >> private-repo/image_list.txt
         env:
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
-      
+
       - name: Commit local changes
         run: |
-          git add ali_image.txt
-          git commit -m "Update ali_image.txt with new docker pull command"
-
+          cd private-repo
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add image_list.txt
+          git commit -m "Update image_list.txt with new docker pull command"
 
       - name: Push changes
         run: |
-          git push
+          cd private-repo
+          git push https://x-access-token:${{ secrets.S_TOKEN }}@github.com/${{ secrets.S_REPO }}.git HEAD:main
+
+
 
       - name: Get lock file SHA
         id: get_lock_sha
         run: |
-          LOCK_SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/contents/.lock | jq -r '.sha')
+          LOCK_SHA=$(curl -s -H "Authorization: token ${{ secrets.S_TOKEN }}" \
+            https://api.github.com/repos/${{ secrets.S_REPO }}/contents/.lock | jq -r '.sha')
           echo "::set-output name=sha::$LOCK_SHA"
 
       - name: Release lock using GitHub API
         if: always()
         run: |
-          curl -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          curl -X DELETE -H "Authorization: token ${{ secrets.S_TOKEN }}" \
             -d '{"message":"Release lock file", "sha": "${{ steps.get_lock_sha.outputs.sha }}"}' \
-            https://api.github.com/repos/${{ github.repository }}/contents/.lock
+            https://api.github.com/repos/${{ secrets.S_REPO }}/contents/.lock
           echo "Lock released."
 ```
 
@@ -244,10 +250,10 @@ async function handleRequest(request) {
                   const formattedTime = \`\${now.getFullYear()}-\${(now.getMonth() + 1).toString().padStart(2, '0')}-\${now.getDate().toString().padStart(2, '0')} \${now.getHours().toString().padStart(2, '0')}:\${now.getMinutes().toString().padStart(2, '0')}:\${now.getSeconds().toString().padStart(2, '0')}\`;
 
                   // 生成拉取命令
-                  const pullCommands = this.images.map(image => \`docker pull crpi-85vdj2b099n8ocq5.cn-guangzhou.personal.cr.aliyuncs.com/images730/\${image.target}\`);
+                  const pullCommands = this.images.map(image => \`docker pull ${ALIYUN_REGISTRY}/${ALIYUN_NAME_SPACE}/\${image.target}\`).join('<br><br>');
 
                   // 更新消息
-                  this.message = \`同步请求已发送，时间：\${formattedTime}<br>请执行以下拉取命令：<br>\${pullCommands}<br>\`;
+                  this.message = \`同步请求已发送，时间：\${formattedTime}<br>稍等30S~60S后，请执行以下拉取命令：<br><br>\${pullCommands}<br>\`;
                   this.messageClass = 'bg-green-100 text-green-600';
                 } catch (error) {
                   console.error("Error:", error);
@@ -295,6 +301,8 @@ async function handleRequest(request) {
       return new Response(`Error: ${error.message}`, { status: 500 });
     }
   }
+  return new Response("Method Not Allowed", { status: 405 });
+}
 ```
 
 </details>
@@ -306,6 +314,7 @@ async function handleRequest(request) {
 - GITHUB_TOKEN -> 新建一个 github token 
 - REPO_OWNER -> github 用户名
 - REPO_NAME -> github 仓库名
-
+- ALIYUN_NAME_SPACE -> 阿里云仓库命名空间
+- ALIYUN_REGISTRY -> 阿里云仓库地址
 
 
