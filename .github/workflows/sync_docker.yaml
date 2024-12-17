@@ -52,8 +52,17 @@ jobs:
 
       - name: Append docker pull command to image_list.txt
         run: |
+          # 去重处理
+          cat private-repo/image_list.txt | awk '!seen[$0]++' > private-repo/image_list_temp.txt
+          mv private-repo/image_list_temp.txt private-repo/image_list.txt
 
-          echo "docker pull $target_docker_image" >> private-repo/image_list.txt
+          # 检查是否已经存在相同的 docker pull 命令
+          if ! grep -Fxq "docker pull $target_docker_image" private-repo/image_list.txt; then
+            # 如果不存在，则追加新的 docker pull 命令
+            echo "docker pull $target_docker_image" >> private-repo/image_list.txt
+          else
+            echo "Docker pull command already exists in image_list.txt, skipping append."
+          fi
         env:
           target_docker_image: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAME_SPACE }}/${{ matrix.images.target }}
 
