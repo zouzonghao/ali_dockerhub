@@ -1,6 +1,6 @@
 # 从 Cloudflare worker 到 Github Action 再到阿里云 Docker
 
-![](./demo.avif)
+![demo](./demo.avif)
 
 
 
