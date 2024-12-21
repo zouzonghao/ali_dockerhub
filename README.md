@@ -1,7 +1,7 @@
 # 从 Cloudflare worker 到 Github Action 再到阿里云 Docker
 
 
-![1217230908.avif](/1217230908.avif)
+![1217230908.avif](/1217230908.png)
 
 
 原理：前端 Cloudflare worker ，接收用户的参数，访问 Github Action api，激活 Action 下载镜像，同步到阿里云镜像仓库，然后将镜像拉取命令保存私库
